@@ -4,10 +4,12 @@ import (
 	"Blockchain-Go/types"
 	"fmt"
 	"github.com/rs/zerolog/log"
+	"sync"
 )
 
 type Blockchain struct {
 	storage        types.Storage[*Block]
+	lock           sync.RWMutex
 	headers        []*Header
 	blockValidator types.Validator[*Block]
 }
@@ -18,6 +20,7 @@ func NewBlockchain(genesis *Block) (*Blockchain, error) {
 
 	bc := &Blockchain{
 		headers: []*Header{},
+		lock:    sync.RWMutex{},
 	}
 
 	bc.storage = types.NewBlockMemStorage()
@@ -46,6 +49,9 @@ func (bc *Blockchain) HasBlock(height uint32) bool {
 
 func (bc *Blockchain) Height() uint32 {
 
+	bc.lock.RLock()
+	defer bc.lock.RUnlock()
+
 	if len(bc.headers) > 0 {
 		return uint32(len(bc.headers) - 1)
 	}
@@ -54,7 +60,11 @@ func (bc *Blockchain) Height() uint32 {
 }
 
 func (bc *Blockchain) AddBlockWithoutValidation(block *Block) error {
+
+	bc.lock.Lock()
 	bc.headers = append(bc.headers, block.Header)
+	bc.lock.Unlock()
+
 	res := bc.storage.Put(block)
 
 	if res != nil {
@@ -80,6 +90,9 @@ func (bc *Blockchain) AddBlock(block *Block) error {
 
 func (bc *Blockchain) GetHeader(height uint32) (*Header, error) {
 	if height < bc.Height() {
+
+		bc.lock.Lock()
+		defer bc.lock.Unlock()
 		return bc.headers[height], nil
 	}
 
@@ -99,8 +112,10 @@ func (bc *Blockchain) GetBlocks(from uint32, to uint32) ([]*Block, error) {
 		return nil, fmt.Errorf("invalid range")
 	}
 
-	if to > bc.Height() {
-		to = bc.Height()
+	h := bc.Height()
+
+	if to > h {
+		to = h
 	}
 
 	return bc.storage.GetChunk(from, to)

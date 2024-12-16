@@ -4,6 +4,7 @@ import (
 	"Blockchain-Go/core"
 	"fmt"
 	"github.com/rs/zerolog/log"
+	"sync"
 )
 
 type Storage[T any] interface {
@@ -15,6 +16,7 @@ type Storage[T any] interface {
 }
 
 type BlockMemStorage struct {
+	lock   sync.RWMutex
 	blocks map[uint32]*core.Block
 }
 
@@ -24,6 +26,7 @@ func NewBlockMemStorage() *BlockMemStorage {
 
 	return &BlockMemStorage{
 		blocks: make(map[uint32]*core.Block),
+		lock:   sync.RWMutex{},
 	}
 }
 
@@ -31,6 +34,8 @@ func (st *BlockMemStorage) Put(b *core.Block) error {
 
 	log.Debug().Msg("putting block into memory storage")
 
+	st.lock.Lock()
+	defer st.lock.Unlock()
 	st.blocks[b.Height] = b
 
 	return nil
@@ -40,7 +45,9 @@ func (st *BlockMemStorage) Get(height uint32) (*core.Block, error) {
 
 	log.Debug().Msg("getting block from memory storage")
 
+	st.lock.RLock()
 	block, ok := st.blocks[height]
+	st.lock.RUnlock()
 
 	if !ok {
 		log.Debug().Uint32("height", height).Msg("block not found")
@@ -55,6 +62,9 @@ func (st *BlockMemStorage) GetAll() ([]*core.Block, error) {
 	log.Debug().Msg("getting all blocks from memory storage")
 
 	blocks := make([]*core.Block, 0, len(st.blocks))
+
+	st.lock.RLock()
+	defer st.lock.RUnlock()
 
 	for _, block := range st.blocks {
 		blocks = append(blocks, block)
@@ -86,16 +96,21 @@ func (st *BlockMemStorage) GetChunk(from, to uint32) ([]*core.Block, error) {
 		to = uint32(len(st.blocks))
 	}
 
+	st.lock.RLock()
+
 	for i := from; i <= to; i++ {
 		block, err := st.Get(i)
 
 		if err != nil {
+			st.lock.RUnlock()
 			log.Error().Err(err).Uint32("height", i).Msg("failed to get block")
 			return nil, err
 		}
 
 		blocks = append(blocks, block)
 	}
+
+	st.lock.RUnlock()
 
 	return blocks, nil
 }
@@ -104,5 +119,7 @@ func (st *BlockMemStorage) Count() (uint32, error) {
 
 	log.Debug().Msg("counting blocks in memory storage")
 
+	st.lock.RLock()
+	defer st.lock.RUnlock()
 	return uint32(len(st.blocks)), nil
 }
