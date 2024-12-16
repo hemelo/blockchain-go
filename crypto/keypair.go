@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"github.com/rs/zerolog/log"
 	"math/big"
 )
 
@@ -25,6 +26,7 @@ func GeneratePrivateKey() PrivateKey {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
 	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to generate private key")
 		panic(err)
 	}
 

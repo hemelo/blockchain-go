@@ -6,13 +6,21 @@ import (
 )
 
 type Hasher[T any] interface {
-	Hash(T) Hash
+	Hash(T) (Hash, error)
 }
 
-type BlockHasher struct {
+type HeaderHasher struct {
 }
 
-func (BlockHasher) Hash(b *core.Block) Hash {
-	h := sha256.Sum256(b.HeaderData())
-	return Hash(h[:])
+func (HeaderHasher) Hash(header *core.Header) (Hash, error) {
+
+	headerBytes, err := header.Bytes()
+
+	if err != nil {
+		return Hash{}, err
+	}
+
+	hash := sha256.Sum256(headerBytes)
+
+	return Hash(hash[:]), nil
 }

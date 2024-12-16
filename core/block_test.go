@@ -8,29 +8,17 @@ import (
 	"time"
 )
 
-func randomBlock(height uint32) *Block {
-	header := &Header{
-		Version:       1,
-		PrevBlockHash: types.RandomHash(),
-		Height:        height,
-		Timestamp:     uint64(time.Now().UnixNano()),
-	}
-
-	tx := Transaction{
-		Data: []byte("foo"),
-	}
-
-	return NewBlock(header, []Transaction{tx})
-}
-
 func TestBlock_Hash(t *testing.T) {
-	b := randomBlock(1)
-	assert.NotNil(t, b.Hash(types.BlockHasher{}))
+	b := randomBlock(t, 1, types.Hash{})
+	hash, err := b.Header.Hash(types.HeaderHasher{})
+
+	assert.Nil(t, err)
+	assert.Len(t, hash, 32)
 }
 
 func TestBlock_Sign(t *testing.T) {
 	privateKey := crypto.GeneratePrivateKey()
-	b := randomBlock(1)
+	b := randomBlock(t, 1, types.Hash{})
 
 	assert.Nil(t, b.Sign(privateKey))
 	assert.NotNil(t, b.Signature)
@@ -39,7 +27,7 @@ func TestBlock_Sign(t *testing.T) {
 
 func TestBlock_Verify(t *testing.T) {
 	privateKey := crypto.GeneratePrivateKey()
-	b := randomBlock(1)
+	b := randomBlock(t, 1, types.Hash{})
 
 	assert.Nil(t, b.Sign(privateKey))
 
@@ -63,4 +51,28 @@ func TestBlock_Verify(t *testing.T) {
 	assert.Nil(t, err3)
 	assert.False(t, verified3)
 
+}
+
+func randomBlock(t *testing.T, height uint32, previousBlockHash types.Hash) *Block {
+	header := &Header{
+		Version:       1,
+		PrevBlockHash: previousBlockHash,
+		Height:        height,
+		Timestamp:     uint64(time.Now().UnixNano()),
+	}
+
+	block := NewBlock(header, []Transaction{})
+	return block
+}
+
+func randomBlockWithSignature(t *testing.T, height uint32, previousBlockHash types.Hash) *Block {
+	privateKey := crypto.GeneratePrivateKey()
+	block := randomBlock(t, height, previousBlockHash)
+
+	tx := randomTxWithSignature(t)
+	block.AddTransaction(tx)
+
+	assert.Nil(t, block.Sign(privateKey))
+
+	return block
 }
